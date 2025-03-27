@@ -2461,5 +2461,4 @@ pub fn session_request_mouse_capture(session_id: SessionID, capture: bool) {
 
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
 pub fn session_request_mouse_capture(_session_id: SessionID, _capture: bool) {
-    // 在不支持的平台上不执行任何操作
 }
