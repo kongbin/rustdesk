@@ -428,6 +428,21 @@ Future<List<TToggleMenu>> toolbarCursor(
   final pi = ffiModel.pi;
   final sessionId = ffi.sessionId;
 
+  // 添加鼠标锁定选项 - 仅在桌面端显示
+  if (!isMobile && pi.platform != kPeerPlatformAndroid && !pi.isWayland) {
+    final lockOption = 'lock-mouse-cursor';
+    final lockValue = bind.sessionGetToggleOptionSync(
+        sessionId: sessionId, arg: lockOption) || false;
+    v.add(TToggleMenu(
+        child: Text(translate('Lock mouse cursor')),
+        value: lockValue,
+        onChanged: (value) async {
+          if (value == null) return;
+          // 调用鼠标锁定API
+          bind.sessionRequestMouseCapture(sessionId: sessionId, capture: value);
+        }));
+  }
+
   // show remote cursor
   if (pi.platform != kPeerPlatformAndroid &&
       !ffi.canvasModel.cursorEmbedded &&

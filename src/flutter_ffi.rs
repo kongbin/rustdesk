@@ -8,6 +8,7 @@ use crate::{
     },
     input::*,
     ui_interface::{self, *},
+    ui_session_interface::InvokeUiSession,
 };
 use flutter_rust_bridge::{StreamSink, SyncReturn};
 #[cfg(feature = "plugin_framework")]
@@ -2449,4 +2450,16 @@ pub mod server_side {
     ) -> jboolean {
         jboolean::from(crate::server::is_clipboard_service_ok())
     }
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+pub fn session_request_mouse_capture(session_id: SessionID, capture: bool) {
+    if let Some(session) = sessions::get_session_by_session_id(&session_id) {
+        session.requestCaptureMouse(capture);
+    }
+}
+
+#[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+pub fn session_request_mouse_capture(_session_id: SessionID, _capture: bool) {
+    // 在不支持的平台上不执行任何操作
 }

@@ -1570,6 +1570,15 @@ pub trait InvokeUiSession: Send + Sync + Clone + 'static + Sized + Default {
     fn is_multi_ui_session(&self) -> bool;
     fn update_record_status(&self, start: bool);
     fn update_empty_dirs(&self, _res: ReadEmptyDirsResponse) {}
+    
+    // 添加鼠标捕获请求方法
+    #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+    fn requestCaptureMouse(&self, _capture: bool) {
+        // 默认实现为空，让已有实现不需要强制实现
+    }
+    
+    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+    fn requestCaptureMouse(&self, _capture: bool) {}
 }
 
 impl<T: InvokeUiSession> Deref for Session<T> {

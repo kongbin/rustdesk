@@ -15,6 +15,8 @@ var file_enabled = true; // server side
 var restart_enabled = true; // server side
 var recording_enabled = true; // server side
 var scroll_body = $(body);
+var mouse_locked = false; // 是否锁定鼠标
+var was_mouse_locked = false; // 临时存储锁定状态
 
 handler.setDisplay = function(x, y, w, h, cursor_embedded) {
     display_width = w;
@@ -85,7 +87,20 @@ var entered = false;
 if (!is_file_transfer && !is_port_forward) {
     self.onKey = function(evt) {
         if (!entered) return false;
-        // so that arrow key not move scrollbar
+        
+        // 当按下Esc键时解锁鼠标
+        if (mouse_locked && evt.keyCode == Event.VK_ESCAPE && evt.type == Event.KEY_DOWN) {
+            toggleMouseLock(false);
+            return true;
+        }
+        
+        // 添加锁定鼠标的快捷键 (按Alt+M组合键)
+        if (entered && evt.altKey && evt.keyCode == 77 && evt.type == Event.KEY_DOWN) {
+            toggleMouseLock();
+            return true;
+        }
+        
+        // 避免方向键移动滚动条
         return true; 
     }
 }
@@ -147,6 +162,28 @@ function handler.onMouse(evt)
 {
     is_mouse_event_triggered = true;
     if (is_file_transfer || is_port_forward) return false;
+    
+    // 处理鼠标锁定逻辑
+    if (mouse_locked) {
+        // 当锁定鼠标时，阻止鼠标离开窗口
+        if (evt.type == Event.MOUSE_LEAVE) {
+            // 保存当前的锁定状态，但不实际解锁鼠标
+            was_mouse_locked = true;
+            return true;
+        } else if (evt.type == Event.MOUSE_ENTER && was_mouse_locked) {
+            // 如果是从窗口外重新进入，恢复锁定状态
+            was_mouse_locked = false;
+            handler.requestCaptureMouse(true);
+            return true;
+        }
+    }
+    
+    // 当鼠标在远程窗口内首次点击时锁定鼠标（可选）
+    if (!mouse_locked && evt.type == Event.MOUSE_DOWN && keyboard_enabled) {
+        // 可选：单击时自动锁定鼠标
+        // toggleMouseLock(true);
+    }
+    
     if (view.windowState == View.WINDOW_FULL_SCREEN && !dragging) {
         var dy = evt.y - scroll_body.scroll(#top);
         if (dy <= 1) {
@@ -544,4 +581,51 @@ handler.setPermission = function(name, enabled) {
 handler.closeSuccess = function() {
     // handler.msgbox("success", "Successful", "Ready to go.");
     handler.msgbox("", "", "");
+}
+
+// 提供一个鼠标锁定/解锁的函数
+function toggleMouseLock(lock) {
+    if (lock === undefined) {
+        mouse_locked = !mouse_locked;
+    } else {
+        mouse_locked = lock;
+    }
+    
+    if (mouse_locked) {
+        // 锁定鼠标，隐藏系统光标，并捕获鼠标
+        handler.style.cursor("none");
+        handler.requestCaptureMouse(true);
+        
+        // 显示锁定提示（可选）
+        var lock_hint = $(div#mouse-lock-hint);
+        if (!lock_hint) {
+            var hint = Element.create(<div id="mouse-lock-hint" style="position:absolute;top:10px;right:10px;background:rgba(0,0,0,0.5);color:white;padding:5px;border-radius:5px;z-index:1000;">
+                {translate('Press Esc to unlock mouse')}
+            </div>);
+            $(body).append(hint);
+        } else {
+            lock_hint.style.set { display: "block" };
+        }
+    } else {
+        // 解除锁定，恢复系统光标
+        if (useSystemCursor) {
+            handler.style#cursor = undefined;
+        } else if (cur_img) {
+            handler.style.cursor(cur_img, (cur_hotx * display_scale).toInteger(), (cur_hoty * display_scale).toInteger());
+        }
+        handler.requestCaptureMouse(false);
+        
+        // 隐藏锁定提示
+        var lock_hint = $(div#mouse-lock-hint);
+        if (lock_hint) {
+            lock_hint.style.set { display: "none" };
+        }
+    }
+}
+
+// 添加释放鼠标请求函数，供native层调用
+handler.requestMouseRelease = function() {
+    if (mouse_locked) {
+        toggleMouseLock(false);
+    }
 }

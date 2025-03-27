@@ -546,11 +546,8 @@ pub fn get_mouse_time() -> f64 {
 
 #[inline]
 pub fn check_mouse_time() {
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    {
-        let sender = SENDER.lock().unwrap();
-        allow_err!(sender.send(ipc::Data::MouseMoveTime(0)));
-    }
+    let sender = SENDER.lock().unwrap();
+    allow_err!(sender.send(ipc::Data::MouseMoveTime(0)));
 }
 
 #[inline]
@@ -1518,4 +1515,15 @@ pub fn clear_trusted_devices() {
 #[cfg(feature = "flutter")]
 pub fn max_encrypt_len() -> usize {
     hbb_common::config::ENCRYPT_MAX_LEN
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+pub fn request_capture_mouse(capture: bool) {
+    let sender = SENDER.lock().unwrap();
+    allow_err!(sender.send(ipc::Data::CaptureMouse(capture)));
+}
+
+#[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+pub fn request_capture_mouse(_capture: bool) {
+    // 仅在主要桌面平台实现
 }

@@ -272,6 +272,9 @@ pub enum Data {
     HwCodecConfig(Option<String>),
     RemoveTrustedDevices(Vec<Bytes>),
     ClearTrustedDevices,
+    // 新增鼠标捕获相关信息
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    CaptureMouse(bool),
 }
 
 #[tokio::main(flavor = "current_thread")]
@@ -707,7 +710,7 @@ pub async fn start_pa() {
                             let mut buf: Vec<u8> = vec![0; AUDIO_DATA_SIZE_U8];
                             match psimple::Simple::new(
                                 None,                             // Use the default server
-                                &crate::get_app_name(),           // Our application’s name
+                                &crate::get_app_name(),           // Our application's name
                                 pulse::stream::Direction::Record, // We want a record stream
                                 Some(&device),                    // Use the default device
                                 "record",                         // Description of our stream

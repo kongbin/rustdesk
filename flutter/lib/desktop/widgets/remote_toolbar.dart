@@ -230,6 +230,33 @@ class RemoteMenuEntry {
     );
   }
 
+  static MenuEntrySwitch<String> lockMouseCursor(
+    String remoteId,
+    SessionID sessionId,
+    EdgeInsets padding, {
+    DismissFunc? dismissFunc,
+    DismissCallback? dismissCallback,
+  }) {
+    final optKey = 'lock-mouse-cursor';
+    return MenuEntrySwitch<String>(
+      switchType: SwitchType.scheckbox,
+      text: translate('Lock mouse cursor'),
+      getter: () async {
+        return bind.sessionGetToggleOptionSync(sessionId: sessionId, arg: optKey) || false;
+      },
+      setter: (bool v) async {
+        // 调用会话请求鼠标捕获API
+        bind.sessionRequestMouseCapture(sessionId: sessionId, capture: v);
+        if (dismissFunc != null) {
+          dismissFunc();
+        }
+      },
+      padding: padding,
+      dismissOnClicked: true,
+      dismissCallback: dismissCallback,
+    );
+  }
+
   static MenuEntrySwitch<String> disableClipboard(
     SessionID sessionId,
     EdgeInsets? padding, {

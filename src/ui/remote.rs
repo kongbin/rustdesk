@@ -377,7 +377,12 @@ impl InvokeUiSession for SciterHandler {
     fn next_rgba(&self, _display: usize) {}
 
     fn update_record_status(&self, start: bool) {
-        self.call("updateRecordStatus", &make_args!(start));
+        self.call2("updateRecordStatus", &make_args!(start));
+    }
+
+    #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+    fn requestCaptureMouse(&self, capture: bool) {
+        crate::ui_interface::request_capture_mouse(capture);
     }
 }
 

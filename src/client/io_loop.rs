@@ -515,10 +515,10 @@ impl<T: InvokeUiSession> Remote<T> {
         match data {
             Data::Close => {
                 let mut misc = Misc::new();
-                misc.set_close_reason("".to_owned());
-                let mut msg = Message::new();
-                msg.set_misc(misc);
-                allow_err!(peer.send(&msg).await);
+                misc.set_close_reason("close requested".into());
+                let mut msg_out = Message::new();
+                msg_out.set_misc(misc);
+                peer.send(&msg_out).await.ok();
                 return false;
             }
             Data::Login((os_username, os_password, password, remember)) => {
@@ -526,27 +526,7 @@ impl<T: InvokeUiSession> Remote<T> {
                     .handle_login_from_ui(os_username, os_password, password, remember, peer)
                     .await;
             }
-            #[cfg(all(target_os = "windows", not(feature = "flutter")))]
-            Data::ToggleClipboardFile => {
-                self.check_clipboard_file_context();
-            }
             Data::Message(msg) => {
-                match &msg.union {
-                    Some(message::Union::Misc(misc)) => match misc.union {
-                        Some(misc::Union::RefreshVideo(_)) => {
-                            self.video_threads.iter().for_each(|(_, v)| {
-                                *v.discard_queue.write().unwrap() = true;
-                            });
-                        }
-                        Some(misc::Union::RefreshVideoDisplay(display)) => {
-                            if let Some(v) = self.video_threads.get_mut(&(display as usize)) {
-                                *v.discard_queue.write().unwrap() = true;
-                            }
-                        }
-                        _ => {}
-                    },
-                    _ => {}
-                }
                 allow_err!(peer.send(&msg).await);
             }
             Data::SendFiles((id, path, to, file_num, include_hidden, is_remote)) => {
@@ -615,6 +595,29 @@ impl<T: InvokeUiSession> Remote<T> {
                         }
                     }
                 }
+            }
+            #[cfg(all(target_os = "windows", not(feature = "flutter")))]
+            Data::ToggleClipboardFile => {
+                self.check_clipboard_file_context();
+            }
+            Data::Message(msg) => {
+                match &msg.union {
+                    Some(message::Union::Misc(misc)) => match misc.union {
+                        Some(misc::Union::RefreshVideo(_)) => {
+                            self.video_threads.iter().for_each(|(_, v)| {
+                                *v.discard_queue.write().unwrap() = true;
+                            });
+                        }
+                        Some(misc::Union::RefreshVideoDisplay(display)) => {
+                            if let Some(v) = self.video_threads.get_mut(&(display as usize)) {
+                                *v.discard_queue.write().unwrap() = true;
+                            }
+                        }
+                        _ => {}
+                    },
+                    _ => {}
+                }
+                allow_err!(peer.send(&msg).await);
             }
             Data::AddJob((id, path, to, file_num, include_hidden, is_remote)) => {
                 let od = can_enable_overwrite_detection(self.handler.lc.read().unwrap().version);
@@ -943,9 +946,36 @@ impl<T: InvokeUiSession> Remote<T> {
                     }
                 }
             },
+            #[cfg(not(any(target_os = "android", target_os = "ios")))]
+            Data::CaptureMouse(capture) => {
+                #[cfg(target_os = "windows")]
+                {
+                    if let Some(hwnd) = self.get_remote_window_hwnd() {
+                        let _ = crate::platform::windows::capture_mouse(hwnd, capture);
+                    }
+                }
+                #[cfg(target_os = "linux")]
+                {
+                    // 在Linux系统上实现鼠标捕获
+                    let _ = crate::platform::linux::capture_mouse(capture);
+                }
+                #[cfg(target_os = "macos")]
+                {
+                    // 在macOS系统上实现鼠标捕获
+                    let _ = crate::platform::macos::capture_mouse(capture);
+                }
+            }
             _ => {}
         }
         true
+    }
+
+    // Windows平台下获取远程窗口句柄的辅助方法
+    #[cfg(target_os = "windows")]
+    fn get_remote_window_hwnd(&self) -> Option<winapi::shared::windef::HWND> {
+        use crate::platform::windows::get_foreground_window;
+        // 获取当前前台窗口作为远程窗口
+        Some(get_foreground_window())
     }
 
     #[inline]

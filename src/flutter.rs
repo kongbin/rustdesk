@@ -1,6 +1,7 @@
 use crate::{
     client::*,
     flutter_ffi::{EventToUI, SessionID},
+    ui_interface,
     ui_session_interface::{io_loop, InvokeUiSession, Session},
 };
 use flutter_rust_bridge::StreamSink;
@@ -1058,6 +1059,11 @@ impl InvokeUiSession for FlutterHandler {
 
     fn update_record_status(&self, start: bool) {
         self.push_event("record_status", &[("start", &start.to_string())], &[]);
+    }
+
+    #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+    fn requestCaptureMouse(&self, capture: bool) {
+        ui_interface::request_capture_mouse(capture);
     }
 }
 

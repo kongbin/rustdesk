@@ -34,6 +34,7 @@ static mut UNMODIFIED: bool = true;
 
 lazy_static::lazy_static! {
     pub static ref IS_X11: bool = hbb_common::platform::linux::is_x11_or_headless();
+    static ref MOUSE_CAPTURED: Arc<AtomicBool> = Arc::new(AtomicBool::new(false));
 }
 
 thread_local! {
@@ -1488,4 +1489,47 @@ pub fn is_selinux_enforcing() -> bool {
             Err(_) => false,
         },
     }
+}
+
+/// 在Linux平台上实现鼠标捕获功能，主要针对X11
+pub fn capture_mouse(capture: bool) -> ResultType<()> {
+    // 如果当前状态已经是目标状态，则不做任何操作
+    if MOUSE_CAPTURED.load(Ordering::Acquire) == capture {
+        return Ok(());
+    }
+
+    if !*IS_X11 {
+        // Wayland目前不支持鼠标捕获
+        bail!("Mouse capture is only supported on X11 currently");
+    }
+
+    if capture {
+        // 在X11下，可以使用XGrabPointer函数捕获鼠标
+        // 这里我们通过调用xdotool命令实现鼠标捕获
+        let output = std::process::Command::new("xdotool")
+            .args(&["behave_screen_edge", "--delay", "0", "--quiesce", "10", "all", "mousemove", "restore"])
+            .output();
+        
+        if output.is_err() {
+            log::error!("Failed to capture mouse: {:?}", output.err());
+            bail!("Failed to capture mouse, please install xdotool");
+        }
+        
+        MOUSE_CAPTURED.store(true, Ordering::Release);
+        log::info!("Mouse captured on Linux X11");
+    } else {
+        // 释放鼠标捕获
+        let output = std::process::Command::new("xdotool")
+            .args(&["behave_screen_edge", "--delay", "0", "--quiesce", "10", "all", "mousemove", "restore", "cancel"])
+            .output();
+        
+        if output.is_err() {
+            log::error!("Failed to release mouse: {:?}", output.err());
+        }
+        
+        MOUSE_CAPTURED.store(false, Ordering::Release);
+        log::info!("Mouse released on Linux X11");
+    }
+    
+    Ok(())
 }

@@ -24,7 +24,7 @@ use std::{
     os::windows::process::CommandExt,
     path::*,
     ptr::null_mut,
-    sync::{atomic::Ordering, Arc, Mutex},
+    sync::{atomic::{AtomicBool, Ordering}, Arc, Mutex},
     time::{Duration, Instant},
 };
 use wallpaper;
@@ -738,6 +738,8 @@ pub fn send_sas() {
 
 lazy_static::lazy_static! {
     static ref SUPPRESS: Arc<Mutex<Instant>> = Arc::new(Mutex::new(Instant::now()));
+    static ref MOUSE_CAPTURED: Arc<AtomicBool> = Arc::new(AtomicBool::new(false));
+    static ref ORIGINAL_CLIP_CURSOR: Arc<Mutex<Option<(i32, i32, i32, i32)>>> = Arc::new(Mutex::new(None));
 }
 
 pub fn desktop_changed() -> bool {
@@ -2726,5 +2728,79 @@ pub mod reg_display_settings {
             11 => RegType::REG_QWORD,
             _ => RegType::REG_NONE,
         }
+    }
+}
+
+/// 捕获鼠标，限制鼠标在窗口内
+pub fn capture_mouse(hwnd: HWND, capture: bool) -> ResultType<()> {
+    unsafe {
+        // 如果已经在当前状态，不需要再次设置
+        if MOUSE_CAPTURED.load(Ordering::Acquire) == capture {
+            return Ok(());
+        }
+
+        if capture {
+            // 保存当前的鼠标限制区域
+            let mut rect = RECT {
+                left: 0,
+                top: 0,
+                right: 0,
+                bottom: 0,
+            };
+            if GetClipCursor(&mut rect) == TRUE {
+                *ORIGINAL_CLIP_CURSOR.lock().unwrap() = Some((rect.left, rect.top, rect.right, rect.bottom));
+            }
+
+            // 获取窗口范围并限制鼠标
+            let mut window_rect = RECT {
+                left: 0,
+                top: 0,
+                right: 0,
+                bottom: 0,
+            };
+            if GetWindowRect(hwnd, &mut window_rect) == FALSE {
+                return Err(io::Error::last_os_error().into());
+            }
+
+            // 设置鼠标限制范围
+            if ClipCursor(&window_rect) == FALSE {
+                return Err(io::Error::last_os_error().into());
+            }
+
+            // 隐藏光标
+            ShowCursor(FALSE);
+
+            MOUSE_CAPTURED.store(true, Ordering::Release);
+            log::info!("Mouse captured");
+        } else {
+            // 恢复之前的鼠标限制区域
+            let original_rect = ORIGINAL_CLIP_CURSOR.lock().unwrap().take();
+            if let Some((left, top, right, bottom)) = original_rect {
+                let rect = RECT {
+                    left,
+                    top,
+                    right,
+                    bottom,
+                };
+                ClipCursor(&rect);
+            } else {
+                // 如果没有保存原来的区域，释放所有限制
+                ClipCursor(null_mut());
+            }
+
+            // 显示光标
+            ShowCursor(TRUE);
+            
+            MOUSE_CAPTURED.store(false, Ordering::Release);
+            log::info!("Mouse released");
+        }
+        Ok(())
+    }
+}
+
+/// 获取前台窗口句柄
+pub fn get_foreground_window() -> HWND {
+    unsafe {
+        GetForegroundWindow()
     }
 }

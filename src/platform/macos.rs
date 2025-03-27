@@ -4,17 +4,18 @@
 
 use super::{CursorData, ResultType};
 use cocoa::{
-    appkit::{NSApp, NSApplication, NSApplicationActivationPolicy::*},
+    appkit::{NSApp, NSApplication, NSApplicationActivationPolicy::*, NSCursor},
     base::{id, nil, BOOL, NO, YES},
-    foundation::{NSDictionary, NSPoint, NSSize, NSString},
+    foundation::{NSDictionary, NSPoint, NSRect, NSSize, NSString},
 };
 use core_foundation::{
     array::{CFArrayGetCount, CFArrayGetValueAtIndex},
+    base::CFRelease,
     dictionary::CFDictionaryRef,
     string::CFStringRef,
 };
 use core_graphics::{
-    display::{kCGNullWindowID, kCGWindowListOptionOnScreenOnly, CGWindowListCopyWindowInfo},
+    display::{kCGNullWindowID, kCGWindowListOptionOnScreenOnly, CGDisplayBounds, CGDisplayCaptureWithBounds, CGDisplayID, CGDisplayRelease, CGMainDisplayID, CGRect, CGSize, CGWindowListCopyWindowInfo},
     window::{kCGWindowName, kCGWindowOwnerPID},
 };
 use hbb_common::{
@@ -27,11 +28,22 @@ use include_dir::{include_dir, Dir};
 use objc::rc::autoreleasepool;
 use objc::{class, msg_send, sel, sel_impl};
 use scrap::{libc::c_void, quartz::ffi::*};
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
+};
 
 static PRIVILEGES_SCRIPTS_DIR: Dir =
     include_dir!("$CARGO_MANIFEST_DIR/src/platform/privileges_scripts");
 static mut LATEST_SEED: i32 = 0;
+
+lazy_static::lazy_static! {
+    static ref MOUSE_CAPTURED: Arc<AtomicBool> = Arc::new(AtomicBool::new(false));
+    static ref ORIGINAL_BOUNDS: Arc<Mutex<Option<(i32, i32, i32, i32)>>> = Arc::new(Mutex::new(None));
+}
 
 extern "C" {
     fn CGSCurrentCursorSeed() -> i32;
@@ -765,4 +777,64 @@ impl WakeLock {
             .map(|h| h.set_display(display))
             .ok_or(anyhow!("no AwakeHandle"))?
     }
+}
+
+/// macOS平台上的鼠标捕获实现
+pub fn capture_mouse(capture: bool) -> ResultType<()> {
+    // 如果当前状态已经是目标状态，则不做任何操作
+    if MOUSE_CAPTURED.load(Ordering::Acquire) == capture {
+        return Ok(());
+    }
+    
+    unsafe {
+        if capture {
+            // 获取当前主显示器ID
+            let display_id = CGMainDisplayID();
+            
+            // 保存当前显示器边界
+            let bounds = CGDisplayBounds(display_id);
+            *ORIGINAL_BOUNDS.lock().unwrap() = Some((
+                bounds.origin.x as i32,
+                bounds.origin.y as i32,
+                bounds.size.width as i32,
+                bounds.size.height as i32,
+            ));
+            
+            // 创建自定义区域 - 使用主显示器区域
+            let rect = CGRect {
+                origin: bounds.origin,
+                size: bounds.size,
+            };
+            
+            // 捕获显示器，这会将鼠标限制在显示器范围内
+            if CGDisplayCaptureWithBounds(display_id, &rect) != 0 {
+                log::error!("Failed to capture display");
+                bail!("Failed to capture display");
+            }
+            
+            // 隐藏鼠标光标
+            autoreleasepool(|| {
+                let _: () = msg_send![class!(NSCursor), hide];
+            });
+            
+            MOUSE_CAPTURED.store(true, Ordering::Release);
+            log::info!("Mouse captured on macOS");
+        } else {
+            // 释放主显示器捕获
+            CGDisplayRelease(CGMainDisplayID());
+            
+            // 显示鼠标光标
+            autoreleasepool(|| {
+                let _: () = msg_send![class!(NSCursor), unhide];
+            });
+            
+            // 清除保存的边界信息
+            *ORIGINAL_BOUNDS.lock().unwrap() = None;
+            
+            MOUSE_CAPTURED.store(false, Ordering::Release);
+            log::info!("Mouse released on macOS");
+        }
+    }
+    
+    Ok(())
 }
