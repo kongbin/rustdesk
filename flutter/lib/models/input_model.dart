@@ -336,6 +336,12 @@ class InputModel {
   var alt = false;
   var command = false;
 
+  // 游戏模式 - 添加游戏模式状态变量
+  final isGameMode = false.obs;
+
+  // 记录上一次鼠标位置，用于计算相对位移
+  Offset _lastRelativePos = Offset.zero;
+
   final ToReleaseRawKeys toReleaseRawKeys = ToReleaseRawKeys();
   final ToReleaseKeys toReleaseKeys = ToReleaseKeys();
 
@@ -1038,7 +1044,28 @@ class InputModel {
       _queryOtherWindowCoords = false;
     }
     if (isPhysicalMouse.value) {
-      handleMouse(_getMouseEvent(e, _kMouseEventMove), e.position);
+      if (isGameMode.value) {
+        // 游戏模式下，计算相对位移
+        final dx = e.position.dx - _lastRelativePos.dx;
+        final dy = e.position.dy - _lastRelativePos.dy;
+        
+        // 发送相对鼠标移动事件
+        if (dx != 0 || dy != 0) {
+          // 获取消息字典
+          final moveEvent = _getMouseEvent(e, _kMouseEventMove);
+          // 修改消息类型为相对模式
+          bind.sessionSendMouse(
+            sessionId: sessionId,
+            msg: '{"type": "relative", "x": "${dx.toInt()}", "y": "${dy.toInt()}"}'
+          );
+        }
+        
+        // 更新上一次位置
+        _lastRelativePos = e.position;
+      } else {
+        // 绝对定位模式
+        handleMouse(_getMouseEvent(e, _kMouseEventMove), e.position);
+      }
     }
   }
 
@@ -1479,4 +1506,13 @@ class InputModel {
       await tapHidKey(PhysicalKeyboardKey.audioVolumeDown.usbHidUsage & 0xFFFF);
   Future<void> onMobilePower() async =>
       await tapHidKey(PhysicalKeyboardKey.power.usbHidUsage & 0xFFFF);
+
+  // 切换游戏模式
+  void toggleGameMode() {
+    isGameMode.value = !isGameMode.value;
+    if (isGameMode.value) {
+      // 游戏模式开启时，初始化相对位置
+      _lastRelativePos = lastMousePos;
+    }
+  }
 }

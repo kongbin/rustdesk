@@ -1017,6 +1017,17 @@ pub fn handle_mouse_(evt: &MouseEvent, conn: i32) {
                 y: evt.y,
             };
         }
+        crate::input::MOUSE_TYPE_RELATIVE => {
+            en.mouse_move_relative(evt.x, evt.y);
+            if let Some((x, y)) = crate::platform::get_cursor_pos() {
+                *LATEST_PEER_INPUT_CURSOR.lock().unwrap() = Input {
+                    conn,
+                    time: get_time(),
+                    x,
+                    y,
+                };
+            }
+        }
         MOUSE_TYPE_DOWN => match buttons {
             MOUSE_BUTTON_LEFT => {
                 allow_err!(en.mouse_down(MouseButton::Left));

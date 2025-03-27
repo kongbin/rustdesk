@@ -1588,6 +1588,7 @@ class _KeyboardMenu extends StatelessWidget {
         hoverColor: _ToolbarTheme.hoverBlueColor,
         menuChildrenGetter: () => [
               keyboardMode(),
+              gameMode(), // 添加游戏模式菜单
               localKeyboardType(),
               inputSource(),
               Divider(),
@@ -1596,6 +1597,23 @@ class _KeyboardMenu extends StatelessWidget {
               ...toolbarToggles(),
               ...mobileActions(),
             ]);
+  }
+
+  // 添加游戏模式开关菜单项
+  gameMode() {
+    return ObxValue<RxBool>(
+      (data) => CkbMenuButton(
+        value: data.value,
+        onChanged: (value) {
+          if (value == null) return;
+          data.value = value;
+          ffi.inputModel.toggleGameMode();
+        },
+        child: Text(translate('Game Mode')),
+        ffi: ffi,
+      ),
+      ffi.inputModel.isGameMode,
+    );
   }
 
   keyboardMode() {

@@ -33,6 +33,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Export Server Config", "导出服务器配置"),
         ("Import server configuration successfully", "导入服务器配置信息成功"),
         ("Export server configuration successfully", "导出服务器配置信息成功"),
+        ("Game Mode", "游戏模式"),
         ("Invalid server configuration", "服务器配置无效，请修改后重新复制配置信息到剪贴板，然后点击此按钮"),
         ("Clipboard is empty", "复制配置信息到剪贴板后点击此按钮，可以自动导入配置"),
         ("Stop service", "停止服务"),
