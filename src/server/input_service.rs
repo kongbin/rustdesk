@@ -9,6 +9,7 @@ use dispatch::Queue;
 use enigo::{Enigo, Key, KeyboardControllable, MouseButton, MouseControllable};
 use hbb_common::{
     get_time,
+    message_proto::mouse_event::MouseMode,
     message_proto::{pointer_device_event::Union::TouchEvent, touch_event::Union::ScaleUpdate},
     protobuf::EnumOrUnknown,
 };
@@ -1009,13 +1010,29 @@ pub fn handle_mouse_(evt: &MouseEvent, conn: i32) {
     }
     match evt_type {
         MOUSE_TYPE_MOVE => {
-            en.mouse_move_to(evt.x, evt.y);
-            *LATEST_PEER_INPUT_CURSOR.lock().unwrap() = Input {
-                conn,
-                time: get_time(),
-                x: evt.x,
-                y: evt.y,
-            };
+            // Check the mouse mode
+            let mode = evt.mode.as_ref()
+                           .map(|e| e.enum_value_or(MouseMode::ABSOLUTE)) // Get enum or default ABSOLUTE if unknown
+                           .unwrap_or(MouseMode::ABSOLUTE); // Default to ABSOLUTE if field is None
+            match mode {
+                MouseMode::RELATIVE => {
+                    // Extract dx and dy, handling potential None values
+                    let dx = evt.dx.unwrap_or(0.0) as i32;
+                    let dy = evt.dy.unwrap_or(0.0) as i32;
+                    en.mouse_move_relative(dx, dy);
+                    // Note: LATEST_PEER_INPUT_CURSOR might not be accurately updated in relative mode
+                    // as we don't receive the absolute position. Let's skip updating it for now.
+                }
+                MouseMode::ABSOLUTE => {
+                    en.mouse_move_to(evt.x, evt.y);
+                    *LATEST_PEER_INPUT_CURSOR.lock().unwrap() = Input {
+                        conn,
+                        time: get_time(),
+                        x: evt.x,
+                        y: evt.y,
+                    };
+                }
+            }
         }
         MOUSE_TYPE_DOWN => match buttons {
             MOUSE_BUTTON_LEFT => {

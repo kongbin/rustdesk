@@ -246,6 +246,7 @@ class RemoteMenuEntry {
     );
   }
 
+  /*
   static MenuEntrySwitch<String> createSwitchMenuEntry(
     SessionID sessionId,
     String text,
@@ -273,6 +274,7 @@ class RemoteMenuEntry {
       dismissCallback: dismissCallback,
     );
   }
+  */
 
   static MenuEntryButton<String> insertLock(
     SessionID sessionId,
@@ -310,6 +312,72 @@ class RemoteMenuEntry {
       ),
       proc: () {
         bind.sessionCtrlAltDel(sessionId: sessionId);
+        if (dismissFunc != null) {
+          dismissFunc();
+        }
+      },
+      padding: padding,
+      dismissOnClicked: true,
+      dismissCallback: dismissCallback,
+    );
+  }
+
+  static MenuEntrySwitch2<String> mouseLock(
+    String remoteId,
+    SessionID sessionId,
+    FFI ffi,
+    EdgeInsets padding, {
+    DismissFunc? dismissFunc,
+    DismissCallback? dismissCallback,
+  }) {
+    final state = ffi.inputModel.isMouseLocked;
+    return MenuEntrySwitch2<String>(
+      switchType: SwitchType.scheckbox,
+      text: translate('Lock Mouse'), // TODO: Translate this string
+      getter: () {
+        // 将 ValueNotifier<bool> 转换为 RxBool
+        final rxBool = state.value.obs;
+        // 监听原始 ValueNotifier 的变化，同步到 rxBool
+        state.addListener(() {
+          rxBool.value = state.value;
+        });
+        return rxBool;
+      },
+      setter: (bool v) async {
+        // Update the state
+        state.value = v;
+        // Optional: Persist this setting if needed, e.g.:
+        // await bind.sessionSetToggleOption(sessionId: sessionId, value: 'mouse-lock', toggle: v);
+        if (dismissFunc != null) {
+          dismissFunc();
+        }
+      },
+      padding: padding,
+      dismissOnClicked: true,
+      dismissCallback: dismissCallback,
+    );
+  }
+
+  static MenuEntrySwitch<String> createSwitchMenuEntry(
+    SessionID sessionId,
+    String text,
+    String optKey,
+    EdgeInsets? padding,
+    bool needSessionId,
+    {
+    bool positive = true,
+    DismissFunc? dismissFunc,
+    DismissCallback? dismissCallback,
+  }) {
+    return MenuEntrySwitch<String>(
+      switchType: SwitchType.scheckbox,
+      text: translate(text),
+      getter: () async {
+        return bind.sessionGetToggleOptionSync(
+            sessionId: sessionId, arg: optKey);
+      },
+      setter: (bool v) async {
+        await bind.sessionToggleOption(sessionId: sessionId, value: optKey);
         if (dismissFunc != null) {
           dismissFunc();
         }

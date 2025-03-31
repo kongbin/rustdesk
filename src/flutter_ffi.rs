@@ -27,6 +27,7 @@ use std::{
     },
     time::SystemTime,
 };
+use flutter_rust_bridge::frb;
 
 pub type SessionID = uuid::Uuid;
 
@@ -2448,5 +2449,24 @@ pub mod server_side {
         _class: JClass,
     ) -> jboolean {
         jboolean::from(crate::server::is_clipboard_service_ok())
+    }
+}
+
+#[frb(sync)]
+pub fn session_send_relative_mouse(
+    session_id: SessionID,
+    dx: f64,
+    dy: f64,
+    button_mask: i32,
+    modifiers: Vec<String>,
+) {
+    // Convert modifier strings to ControlKey enum or similar if needed
+    let alt = modifiers.contains(&"alt".to_string());
+    let ctrl = modifiers.contains(&"ctrl".to_string());
+    let shift = modifiers.contains(&"shift".to_string());
+    let command = modifiers.contains(&"command".to_string());
+
+    if let Some(session) = sessions::get_session_by_session_id(&session_id) {
+        session.send_relative_mouse(dx, dy, button_mask, alt, ctrl, shift, command);
     }
 }

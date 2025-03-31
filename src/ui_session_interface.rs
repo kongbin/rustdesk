@@ -23,6 +23,8 @@ use hbb_common::{
     config::{Config, LocalConfig, PeerConfig},
     get_version_number, log,
     message_proto::*,
+    message_proto::mouse_event::MouseMode,
+    protobuf,
     rendezvous_proto::ConnType,
     tokio::{
         self,
@@ -1100,6 +1102,56 @@ impl<T: InvokeUiSession> Session<T> {
             return (-xy.0, -xy.1);
         }
         xy
+    }
+
+    pub fn send_relative_mouse(
+        &self,
+        dx: f64,
+        dy: f64,
+        button_mask: i32, // Assuming Flutter sends a mask similar to existing mouse events
+        alt: bool,
+        ctrl: bool,
+        shift: bool,
+        command: bool,
+    ) {
+        #[allow(unused_mut)]
+        let mut command = command;
+        #[cfg(windows)]
+        {
+            if !command && crate::platform::windows::get_win_key_state() {
+                command = true;
+            }
+        }
+
+        let (alt, ctrl, shift, command) =
+            keyboard::client::get_modifiers_state(alt, ctrl, shift, command);
+
+        let mut mouse_event = MouseEvent {
+            mask: button_mask, // Use the provided mask directly for now
+            dx: Some(dx),
+            dy: Some(dy),
+            mode: Some(protobuf::EnumOrUnknown::new(MouseMode::RELATIVE)),
+            ..Default::default()
+        };
+
+        if alt {
+            mouse_event.modifiers.push(ControlKey::Alt.into());
+        }
+        if shift {
+            mouse_event.modifiers.push(ControlKey::Shift.into());
+        }
+        if ctrl {
+            mouse_event.modifiers.push(ControlKey::Control.into());
+        }
+        if command {
+            mouse_event.modifiers.push(ControlKey::Meta.into());
+        }
+
+        self.swap_modifier_mouse(&mut mouse_event);
+
+        let mut msg_out = Message::new();
+        msg_out.set_mouse_event(mouse_event);
+        self.send(Data::Message(msg_out));
     }
 
     pub fn send_mouse(

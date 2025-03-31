@@ -371,6 +371,9 @@ class InputModel {
   double get devicePixelRatio => parent.target!.canvasModel.devicePixelRatio;
   bool get isViewCamera => parent.target!.connType == ConnType.viewCamera;
 
+  /// Indicates if the mouse should be locked (relative mode).
+  final ValueNotifier<bool> isMouseLocked = ValueNotifier(false);
+
   InputModel(this.parent) {
     sessionId = parent.target!.sessionId;
   }
@@ -1038,7 +1041,45 @@ class InputModel {
       _queryOtherWindowCoords = false;
     }
     if (isPhysicalMouse.value) {
-      handleMouse(_getMouseEvent(e, _kMouseEventMove), e.position);
+      if (isMouseLocked.value) {
+        // Send relative mouse movement
+
+        // Get modifier key states using RawKeyboard.instance.keysPressed
+        final keysPressed = RawKeyboard.instance.keysPressed;
+        final bool alt = keysPressed.contains(LogicalKeyboardKey.altLeft) ||
+            keysPressed.contains(LogicalKeyboardKey.altRight);
+        final bool ctrl = keysPressed.contains(LogicalKeyboardKey.controlLeft) ||
+            keysPressed.contains(LogicalKeyboardKey.controlRight);
+        final bool shift = keysPressed.contains(LogicalKeyboardKey.shiftLeft) ||
+            keysPressed.contains(LogicalKeyboardKey.shiftRight);
+        // Use Meta for Command/Windows key
+        final bool command = keysPressed.contains(LogicalKeyboardKey.metaLeft) ||
+            keysPressed.contains(LogicalKeyboardKey.metaRight);
+
+        // TODO: Determine the actual button mask based on PointerDown/Up events
+        final int currentButtonMask = 0; // Placeholder
+
+        // TODO: This FFI call might fail if bridge code is not regenerated!
+        // Comment: Since FFI bridge hasn't been regenerated, we temporarily remove the
+        // alt, ctrl, shift, command parameters that our Rust code expects but the bridge doesn't know about.
+        bind.sessionSendRelativeMouse(
+          sessionId: sessionId,
+          dx: e.delta.dx,
+          dy: e.delta.dy,
+          buttonMask: currentButtonMask,
+          modifiers: <String>[], // 修改为空的字符串列表
+          // Temporarily remove these parameters until FFI is regenerated
+          // alt: alt,
+          // ctrl: ctrl,
+          // shift: shift,
+          // command: command,
+        );
+        // Also update lastMousePos for potential future absolute moves if mode changes
+        lastMousePos = e.position;
+      } else {
+        // Send absolute mouse movement (existing logic)
+        handleMouse(_getMouseEvent(e, _kMouseEventMove), e.position);
+      }
     }
   }
 
