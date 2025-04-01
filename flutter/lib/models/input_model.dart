@@ -372,7 +372,8 @@ class InputModel {
   bool get isViewCamera => parent.target!.connType == ConnType.viewCamera;
 
   /// Indicates if the mouse should be locked (relative mode).
-  final ValueNotifier<bool> isMouseLocked = ValueNotifier(false);
+  // Defaulting to true for debugging relative mouse mode
+  final ValueNotifier<bool> isMouseLocked = ValueNotifier(true);
 
   InputModel(this.parent) {
     sessionId = parent.target!.sessionId;
